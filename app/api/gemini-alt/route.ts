@@ -7,18 +7,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "GEMINI_API_KEY is not set" }, { status: 500 })
     }
 
-    let userMessage = ""
+    let messages: { role: string; content: string }[] = []
     try {
       const body = await req.json()
-      const messages = body.messages || []
-      const lastMessage = messages[messages.length - 1]
-      if (lastMessage && lastMessage.role === "user") {
-        userMessage = lastMessage.content
-      }
+      messages = body.messages || []
     } catch (parseError) {
       console.error("Error parsing request body:", parseError)
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
     }
+
+    // Convert chat messages to Gemini format
+    const contents = messages.map((msg) => ({
+      role: msg.role === "assistant" ? "model" : "user",
+      parts: [{ text: msg.content }],
+    }))
 
     const response = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
@@ -29,22 +31,19 @@ export async function POST(req: Request) {
           "x-goog-api-key": process.env.GEMINI_API_KEY,
         },
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: `You are Henry Squad AI, a friendly and helpful AI assistant for elementary school students.
+          systemInstruction: {
+            parts: [
+              {
+                text: `You are Henry Squad AI, a friendly and helpful AI assistant for elementary school students.
 Keep your answers simple, educational, and age-appropriate for children ages 6-11.
 Use clear, straightforward language and short sentences.
 Be encouraging, positive, and patient.
-
-The student asks: ${userMessage}
-
-Your kid-friendly response:`,
-                },
-              ],
-            },
-          ],
+If you don't know something, say so honestly.
+Always directly answer the question the student asks.`,
+              },
+            ],
+          },
+          contents,
           generationConfig: {
             temperature: 0.7,
             maxOutputTokens: 300,
