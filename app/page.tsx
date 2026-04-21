@@ -22,7 +22,6 @@ export default function Home() {
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [useBackupMode, setUseBackupMode] = useState(false)
 
   // State for voice features
   const [isRecording, setIsRecording] = useState(false)
@@ -179,12 +178,6 @@ export default function Home() {
         throw new Error("Invalid response format")
       }
 
-      // Check if we should use backup mode
-      if (data.useBackup) {
-        setUseBackupMode(true)
-        console.log("API indicated we should use backup mode")
-      }
-
       return data.content
     } catch (error) {
       console.error(`Error with ${endpoint}:`, error)
@@ -222,53 +215,27 @@ export default function Home() {
     }))
 
     let responseContent = ""
-    let usedFallback = false
-
     try {
-      // If we're in backup mode, skip straight to the mock API
-      if (useBackupMode) {
-        console.log("Using mock API due to backup mode")
-        responseContent = await tryGetResponse("/api/mock-chat", messagesToSend)
-        usedFallback = true
-      } else {
-        // Try each API endpoint in order until one works
-        const apiEndpoints = [
-          "/api/gemini-alt", // Try the alternative implementation first
-          "/api/gemini-simple", // Then try simple Gemini implementation
-          "/api/gemini-chat", // Then try the more complex Gemini implementation
-          "/api/mock-chat", // Fall back to the mock API as last resort
-        ]
+      // Try each API endpoint in order until one works
+      const apiEndpoints = [
+        "/api/chat", // OpenAI - primary
+        "/api/gemini-alt", // Gemini fallback
+        "/api/gemini-simple", // Gemini simple fallback
+      ]
 
-        for (const endpoint of apiEndpoints) {
-          try {
-            console.log(`Trying API: ${endpoint}...`)
-            responseContent = await tryGetResponse(endpoint, messagesToSend)
-            console.log(`${endpoint} API succeeded`)
-
-            // If we're using the mock API, note that we used the fallback
-            if (endpoint === "/api/mock-chat") {
-              usedFallback = true
-              setUseBackupMode(true)
-            }
-
-            break // If successful, break out of the loop
-          } catch (apiError) {
-            console.error(`${endpoint} API failed:`, apiError)
-
-            // If this is the last API and it fails, we're in trouble
-            if (endpoint === apiEndpoints[apiEndpoints.length - 1]) {
-              throw apiError
-            }
-
-            // If not the last API, continue to the next one
-            continue
+      for (const endpoint of apiEndpoints) {
+        try {
+          console.log(`Trying API: ${endpoint}...`)
+          responseContent = await tryGetResponse(endpoint, messagesToSend)
+          console.log(`${endpoint} API succeeded`)
+          break
+        } catch (apiError) {
+          console.error(`${endpoint} API failed:`, apiError)
+          if (endpoint === apiEndpoints[apiEndpoints.length - 1]) {
+            throw apiError
           }
+          continue
         }
-      }
-
-      // Add a note if we used the fallback
-      if (usedFallback && !responseContent.includes("training mode")) {
-        responseContent += " (I'm in training mode right now, so my answers are simpler than usual.)"
       }
 
       // Add AI response to chat
@@ -302,9 +269,6 @@ export default function Home() {
       <Card className="w-full max-w-3xl shadow-lg border-2 border-purple-200">
         <CardHeader className="bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-t-lg">
           <CardTitle className="text-center text-2xl md:text-3xl font-bold">Henry Squad AI Chat</CardTitle>
-          {useBackupMode && (
-            <div className="text-center text-white text-sm bg-purple-700 rounded-md p-1 mt-1">Training Mode Active</div>
-          )}
         </CardHeader>
 
         <CardContent className="p-4 h-[60vh] overflow-y-auto">
@@ -321,11 +285,6 @@ export default function Home() {
               <p className="text-gray-600 max-w-md">
                 I'm Henry Squad AI! Ask me any question by typing or using the microphone button. I can help with
                 homework, tell stories, or explain cool facts!
-                {useBackupMode && (
-                  <span className="block mt-2 text-purple-600">
-                    (I'm in training mode right now, so my answers will be simpler than usual.)
-                  </span>
-                )}
               </p>
             </div>
           ) : (
