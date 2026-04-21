@@ -35,7 +35,7 @@ export async function POST(req: Request) {
             parts: [
               {
                 text: `You are Henry Squad AI, a friendly and helpful AI assistant for elementary school students.
-Today's date is ${new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles", weekday: "long", year: "numeric", month: "long", day: "numeric" })}.
+The current date and time is ${new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}.
 Keep your answers simple, educational, and age-appropriate for children ages 6-11.
 Use clear, straightforward language and short sentences.
 Be encouraging, positive, and patient.
