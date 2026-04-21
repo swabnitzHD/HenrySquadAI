@@ -1,264 +1,148 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Mic, MicOff, Send, Volume2, VolumeX } from "lucide-react"
-import { Avatar } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
-// Define message type
 type Message = {
   id: string
   role: "user" | "assistant"
   content: string
 }
 
+
 export default function Home() {
-  // State for chat
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  // State for voice features
   const [isRecording, setIsRecording] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
-  const [micPermission, setMicPermission] = useState<boolean | null>(null)
+  const [hasMic, setHasMic] = useState(false)
 
-  // Refs
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Check for microphone permission
+  // Set up speech recognition once on mount
   useEffect(() => {
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .then(() => setMicPermission(true))
-        .catch(() => setMicPermission(false))
-    } else {
-      setMicPermission(false)
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) return
+
+    navigator.mediaDevices?.getUserMedia({ audio: true })
+      .then(() => {
+        const recognition = new SpeechRecognition()
+        recognition.continuous = false
+        recognition.interimResults = true
+        recognition.lang = "en-US"
+
+        recognition.onresult = (event: any) => {
+          const transcript = Array.from(event.results)
+            .map((result: any) => result[0].transcript)
+            .join("")
+          setInput(transcript)
+        }
+        recognition.onend = () => setIsRecording(false)
+        recognition.onerror = () => setIsRecording(false)
+
+        recognitionRef.current = recognition
+        setHasMic(true)
+      })
+      .catch(() => setHasMic(false))
+
+    return () => {
+      try { recognitionRef.current?.stop() } catch {}
     }
   }, [])
 
-  // Initialize speech recognition
-  useEffect(() => {
-    if (typeof window !== "undefined" && micPermission) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-
-      if (SpeechRecognition) {
-        recognitionRef.current = new SpeechRecognition()
-        recognitionRef.current.continuous = false
-        recognitionRef.current.interimResults = true
-        recognitionRef.current.lang = "en-US"
-
-        recognitionRef.current.onresult = (event: any) => {
-          const currentTranscript = Array.from(event.results)
-            .map((result: any) => result[0])
-            .map((result: any) => result.transcript)
-            .join("")
-
-          setInput(currentTranscript)
-        }
-
-        recognitionRef.current.onend = () => {
-          setIsRecording(false)
-        }
-
-        recognitionRef.current.onerror = (event: any) => {
-          console.error("Speech recognition error", event.error)
-          setIsRecording(false)
-        }
-      }
-    }
-
-    return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop()
-        } catch (e) {
-          // Ignore errors when stopping
-        }
-      }
-    }
-  }, [micPermission])
-
-  // Scroll to bottom of messages
+  // Auto-scroll on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // Toggle recording
-  const toggleRecording = () => {
-    if (!recognitionRef.current) {
-      alert("Speech recognition is not supported in your browser. Please try Chrome, Edge, or Safari.")
-      return
-    }
-
+  const toggleRecording = useCallback(() => {
+    if (!recognitionRef.current) return
     if (isRecording) {
       recognitionRef.current.stop()
-      setIsRecording(false)
     } else {
-      // Clear input before starting
       setInput("")
-
-      try {
-        recognitionRef.current.start()
-        setIsRecording(true)
-      } catch (error) {
-        console.error("Error starting speech recognition:", error)
-        alert("Could not start speech recognition. Please try again.")
-      }
+      try { recognitionRef.current.start(); setIsRecording(true) } catch {}
     }
-  }
+  }, [isRecording])
 
-  // Speak the text
-  const speakText = (text: string) => {
-    if (!("speechSynthesis" in window)) {
-      alert("Text-to-speech is not supported in your browser.")
-      return
-    }
-
-    // Cancel any ongoing speech
+  const speakText = useCallback((text: string) => {
+    if (!("speechSynthesis" in window)) return
     window.speechSynthesis.cancel()
 
     const utterance = new SpeechSynthesisUtterance(text)
-    utterance.rate = 0.9 // Slightly slower for kids
-    utterance.pitch = 1.1 // Slightly higher pitch
-
+    utterance.rate = 0.9
+    utterance.pitch = 1.1
     utterance.onstart = () => setIsSpeaking(true)
     utterance.onend = () => setIsSpeaking(false)
-    utterance.onerror = (event) => {
-      console.error("Speech synthesis error:", event)
-      setIsSpeaking(false)
-    }
+    utterance.onerror = () => setIsSpeaking(false)
 
     window.speechSynthesis.speak(utterance)
-  }
+  }, [])
 
-  // Toggle speaking for the latest AI message
-  const toggleSpeaking = () => {
-    if (!("speechSynthesis" in window)) return
-
+  const toggleSpeaking = useCallback(() => {
     if (isSpeaking) {
       window.speechSynthesis.cancel()
       setIsSpeaking(false)
     } else {
       const lastAiMessage = [...messages].reverse().find((m) => m.role === "assistant")
-      if (lastAiMessage) {
-        speakText(lastAiMessage.content)
-      }
+      if (lastAiMessage) speakText(lastAiMessage.content)
     }
-  }
+  }, [isSpeaking, messages, speakText])
 
-  // Try to get a response from an API endpoint
-  const tryGetResponse = async (endpoint: string, messagesToSend: any[]) => {
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messages: messagesToSend,
-        }),
-        // Set a timeout to prevent hanging requests
-        signal: AbortSignal.timeout(15000), // 15 second timeout
-      })
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      if (!data || !data.content) {
-        throw new Error("Invalid response format")
-      }
-
-      return data.content
-    } catch (error) {
-      console.error(`Error with ${endpoint}:`, error)
-      throw error
-    }
-  }
-
-  // Handle form submission
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    setError(null)
+    if (!input.trim() || isLoading) return
 
-    if (isRecording) {
-      recognitionRef.current?.stop()
-      setIsRecording(false)
-    }
+    if (isRecording) recognitionRef.current?.stop()
 
-    if (!input.trim()) return
-
-    // Add user message to chat
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: input,
+      content: input.trim(),
     }
 
-    setMessages((prev) => [...prev, userMessage])
+    const updatedMessages = [...messages, userMessage]
+    setMessages(updatedMessages)
     setIsLoading(true)
     setInput("")
 
-    // Format messages for the API
-    const messagesToSend = messages.concat(userMessage).map(({ role, content }) => ({
-      role,
-      content,
-    }))
-
-    let responseContent = ""
     try {
-      // Try each API endpoint in order until one works
-      const apiEndpoints = [
-        "/api/chat", // OpenAI - primary
-        "/api/gemini-alt", // Gemini fallback
-        "/api/gemini-simple", // Gemini simple fallback
-      ]
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: updatedMessages.map(({ role, content }) => ({ role, content })),
+        }),
+        signal: AbortSignal.timeout(30000),
+      })
 
-      for (const endpoint of apiEndpoints) {
-        try {
-          console.log(`Trying API: ${endpoint}...`)
-          responseContent = await tryGetResponse(endpoint, messagesToSend)
-          console.log(`${endpoint} API succeeded`)
-          break
-        } catch (apiError) {
-          console.error(`${endpoint} API failed:`, apiError)
-          if (endpoint === apiEndpoints[apiEndpoints.length - 1]) {
-            throw apiError
-          }
-          continue
-        }
-      }
+      if (!response.ok) throw new Error(`API error: ${response.status}`)
 
-      // Add AI response to chat
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: responseContent,
-      }
+      const data = await response.json()
+      if (!data?.content) throw new Error("Empty response")
 
-      setMessages((prev) => [...prev, assistantMessage])
-      speakText(assistantMessage.content)
-    } catch (err: any) {
-      console.error("All APIs failed:", err)
-
-      // Add a friendly error message to the chat
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "I'm having a little trouble thinking right now. Can we try again with a different question?",
-      }
-
-      setMessages((prev) => [...prev, errorMessage])
-      speakText(errorMessage.content)
+      setMessages((prev) => [
+        ...prev,
+        { id: (Date.now() + 1).toString(), role: "assistant", content: data.content },
+      ])
+    } catch (err) {
+      console.error("Chat error:", err)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "I'm having a little trouble thinking right now. Can you try again?",
+        },
+      ])
     } finally {
       setIsLoading(false)
     }
@@ -268,23 +152,22 @@ export default function Home() {
     <main className="flex min-h-screen flex-col items-center justify-between p-4 md:p-8 bg-gradient-to-b from-blue-50 to-purple-50">
       <Card className="w-full max-w-3xl shadow-lg border-2 border-purple-200">
         <CardHeader className="bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-t-lg">
-          <CardTitle className="text-center text-2xl md:text-3xl font-bold">Henry Squad AI Chat</CardTitle>
+          <CardTitle className="text-center text-2xl md:text-3xl font-bold">
+            Henry Squad AI Chat
+          </CardTitle>
         </CardHeader>
 
         <CardContent className="p-4 h-[60vh] overflow-y-auto">
-          {error && <div className="p-4 mb-4 text-red-700 bg-red-100 rounded-lg">Error: {error}</div>}
-
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-              <img
-                src="/placeholder.svg?height=120&width=120"
-                alt="Henry Squad AI"
-                className="rounded-full bg-purple-100 p-4"
-              />
+              <div className="w-24 h-24 rounded-full bg-purple-100 flex items-center justify-center text-4xl">
+                🤖
+              </div>
               <h2 className="text-xl font-semibold text-purple-700">Hello there!</h2>
               <p className="text-gray-600 max-w-md">
-                I'm Henry Squad AI! Ask me any question by typing or using the microphone button. I can help with
-                homework, tell stories, or explain cool facts!
+                I&apos;m Henry Squad AI! Ask me any question by typing or using the
+                microphone button. I can help with homework, tell stories, or explain
+                cool facts!
               </p>
             </div>
           ) : (
@@ -299,11 +182,14 @@ export default function Home() {
                     message.role === "user" ? "flex-row-reverse" : "flex-row",
                   )}
                 >
-                  <Avatar
-                    className={cn("w-8 h-8", message.role === "user" ? "ml-2 bg-blue-500" : "mr-2 bg-purple-500")}
+                  <div
+                    className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0",
+                      message.role === "user" ? "ml-2 bg-blue-500" : "mr-2 bg-purple-500",
+                    )}
                   >
                     {message.role === "user" ? "U" : "AI"}
-                  </Avatar>
+                  </div>
                   <div
                     className={cn(
                       "rounded-lg p-3",
@@ -323,7 +209,7 @@ export default function Home() {
 
         <CardFooter className="p-4 border-t">
           <form onSubmit={handleSubmit} className="flex w-full space-x-2">
-            {micPermission !== false && (
+            {hasMic && (
               <Button
                 type="button"
                 size="icon"
