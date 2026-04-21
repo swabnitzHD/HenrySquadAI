@@ -14,8 +14,8 @@ export async function POST(req: Request) {
     if (!process.env.OPENAI_API_KEY) {
       console.error("OPENAI_API_KEY is not set")
       return NextResponse.json(
-        { content: "I'm not configured correctly. Please ask a teacher or parent to help set me up." },
-        { status: 200 },
+        { error: "OPENAI_API_KEY is not set" },
+        { status: 500 },
       )
     }
 
@@ -73,28 +73,17 @@ export async function POST(req: Request) {
         throw new Error("Empty response from OpenAI")
       }
     } catch (openaiError: any) {
-      // Log the detailed OpenAI error
-      console.error("OpenAI API error:", openaiError)
-      console.error("Error details:", openaiError.message)
-
-      if (openaiError.response) {
-        console.error("Error response:", openaiError.response.data)
-      }
-
-      // Return a friendly error message
-      return NextResponse.json({
-        content: "I'm having a little trouble thinking right now. Let's try again in a moment!",
-        error: openaiError.message,
-      })
+      console.error("OpenAI API error:", openaiError.message)
+      return NextResponse.json(
+        { error: openaiError.message },
+        { status: 502 },
+      )
     }
   } catch (error: any) {
-    // Log the detailed error
     console.error("Unexpected error in chat API:", error)
-
-    // Return a friendly error message
-    return NextResponse.json({
-      content: "I'm having a little trouble thinking right now. Let's try again in a moment!",
-      error: error.message,
-    })
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 },
+    )
   }
 }
