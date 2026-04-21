@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
     const prompt = `You are Henry Squad AI, a friendly and helpful AI assistant for elementary school students.
 Keep your answers simple, educational, and age-appropriate for children ages 6-11.
