@@ -16,6 +16,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
     }
 
+    const now = new Date()
+
     // Convert chat messages to Gemini format
     const contents = messages.map((msg) => ({
       role: msg.role === "assistant" ? "model" : "user",
@@ -34,20 +36,24 @@ export async function POST(req: Request) {
           systemInstruction: {
             parts: [
               {
-                text: `You are Henry Squad AI, a friendly and helpful AI assistant for elementary school students.
-The current date and time is ${new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}.
-Keep your answers simple, educational, and age-appropriate for children ages 6-11.
-Use clear, straightforward language and short sentences.
-Be encouraging, positive, and patient.
-If you don't know something, say so honestly.
-Always directly answer the question the student asks.`,
+                text: [
+                  "You are Henry Squad AI, a friendly and helpful AI assistant for elementary school students.",
+                  `CURRENT TIME: ${now.toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" })} Pacific Time.`,
+                  `CURRENT DATE: ${now.toLocaleDateString("en-US", { timeZone: "America/Los_Angeles", weekday: "long", year: "numeric", month: "long", day: "numeric" })}.`,
+                  "When asked about the time or date, use ONLY the values above. Do not guess.",
+                  "Keep your answers simple, educational, and age-appropriate for children ages 6-11.",
+                  "Use clear, straightforward language and short sentences.",
+                  "Be encouraging, positive, and patient.",
+                  "If you don't know something, say so honestly.",
+                  "Always directly answer the question the student asks.",
+                ].join("\n"),
               },
             ],
           },
           contents,
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 300,
+            maxOutputTokens: 1024,
           },
         }),
       },
