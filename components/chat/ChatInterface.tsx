@@ -16,6 +16,9 @@ import {
   Plus,
   Trash2,
   MessageSquare,
+  Copy,
+  Check,
+  Code,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -24,6 +27,7 @@ type Message = {
   role: "user" | "assistant"
   content: string
   imageUrl?: string
+  hasCodeBlock?: boolean
 }
 
 interface ChatInterfaceProps {
@@ -42,6 +46,7 @@ export default function ChatInterface({ user, onLogout }: ChatInterfaceProps) {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [showSessions, setShowSessions] = useState(false)
   const [isGeneratingImage, setIsGeneratingImage] = useState(false)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const recognitionRef = useRef<any>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -203,6 +208,26 @@ export default function ChatInterface({ user, onLogout }: ChatInterfaceProps) {
     }
   }
 
+  const extractCodeBlock = (text: string): string | null => {
+    const codeBlockMatch = text.match(/```[\s\S]*?```|```[a-zA-Z0-9]*\n([\s\S]*?)```/);
+    if (codeBlockMatch) {
+      return codeBlockMatch[0].replace(/```[a-zA-Z0-9]*\n?/g, '').trim()
+    }
+    return null
+  }
+
+  const copyToClipboard = async (messageId: string, content: string) => {
+    try {
+      const codeBlock = extractCodeBlock(content)
+      const textToCopy = codeBlock || content
+      await navigator.clipboard.writeText(textToCopy)
+      setCopiedId(messageId)
+      setTimeout(() => setCopiedId(null), 2000)
+    } catch (error) {
+      console.error("Copy failed:", error)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!input.trim() || isLoading || !currentSessionId) return
@@ -237,9 +262,16 @@ export default function ChatInterface({ user, onLogout }: ChatInterfaceProps) {
       const data = await response.json()
       if (!data?.content) throw new Error("Empty response")
 
+      const hasCodeBlock = /```[\s\S]*?```/.test(data.content)
+      
       setMessages((prev) => [
         ...prev,
-        { id: (Date.now() + 1).toString(), role: "assistant", content: data.content },
+        { 
+          id: (Date.now() + 1).toString(), 
+          role: "assistant", 
+          content: data.content,
+          hasCodeBlock 
+        },
       ])
     } catch (err) {
       console.error("Chat error:", err)
@@ -365,7 +397,7 @@ export default function ChatInterface({ user, onLogout }: ChatInterfaceProps) {
                   <p className="text-gray-600 max-w-md">
                     I'm Henry Squad AI! Ask me any question by typing or using the
                     microphone button. I can help with homework, tell stories, explain cool
-                    facts, or even generate images!
+                    facts, generate images, or write code!
                   </p>
                 </div>
               ) : (
@@ -390,19 +422,42 @@ export default function ChatInterface({ user, onLogout }: ChatInterfaceProps) {
                       </div>
                       <div
                         className={cn(
-                          "rounded-lg p-3",
+                          "rounded-lg p-3 relative group",
                           message.role === "user"
                             ? "bg-blue-500 text-white rounded-tr-none"
                             : "bg-purple-100 text-gray-800 rounded-tl-none"
                         )}
                       >
-                        <p>{message.content}</p>
+                        <p className="whitespace-pre-wrap break-words">{message.content}</p>
                         {message.imageUrl && (
                           <img
                             src={message.imageUrl}
                             alt="Generated"
                             className="mt-3 rounded-lg max-w-xs"
                           />
+                        )}
+                        
+                        {message.role === "assistant" && message.hasCodeBlock && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => copyToClipboard(message.id, message.content)}
+                            className={cn(
+                              "mt-2 opacity-0 group-hover:opacity-100 transition-opacity",
+                              copiedId === message.id ? "bg-green-100" : ""
+                            )}
+                            title="Copy code"
+                          >
+                            {copiedId === message.id ? (
+                              <>
+                                <Check className="w-3 h-3 mr-1" /> Copied
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3 mr-1" /> Copy Code
+                              </>
+                            )}
+                          </Button>
                         )}
                       </div>
                     </div>
