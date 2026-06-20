@@ -3,7 +3,7 @@
 
 const DB_KEY = "henrysquadai_db"
 
-interface User {
+export interface User {
   id: string
   username: string
   email: string
@@ -12,7 +12,7 @@ interface User {
   createdAt: string
 }
 
-interface ChatSession {
+export interface ChatSession {
   id: string
   userId: string
   name: string
@@ -26,7 +26,7 @@ interface ChatSession {
   updatedAt: string
 }
 
-interface Database {
+export interface Database {
   users: User[]
   chatSessions: ChatSession[]
 }
@@ -47,6 +47,8 @@ export function initializeDB() {
         createDefaultUsers()
         saveDB()
       }
+    } else {
+      createDefaultUsers()
     }
   } catch (error) {
     console.error("Error initializing DB:", error)
@@ -55,13 +57,12 @@ export function initializeDB() {
 }
 
 function createDefaultUsers() {
-  const bcrypt = require("bcryptjs")
   db.users = [
     {
       id: "user_1",
       username: "henry",
       email: "henry@henrysquad.ai",
-      passwordHash: bcrypt.hashSync("henry123", 10),
+      passwordHash: "henry123",
       role: "user",
       createdAt: new Date().toISOString(),
     },
@@ -69,7 +70,7 @@ function createDefaultUsers() {
       id: "editor_1",
       username: "editor",
       email: "editor@henrysquad.ai",
-      passwordHash: bcrypt.hashSync("editor123", 10),
+      passwordHash: "editor123",
       role: "editor",
       createdAt: new Date().toISOString(),
     },
