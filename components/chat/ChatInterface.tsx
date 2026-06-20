@@ -18,7 +18,6 @@ import {
   MessageSquare,
   Copy,
   Check,
-  Code,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -150,7 +149,10 @@ export default function ChatInterface({ user, onLogout }: ChatInterfaceProps) {
     if (!("speechSynthesis" in window)) return
     window.speechSynthesis.cancel()
 
-    const utterance = new SpeechSynthesisUtterance(text)
+    // Extract text without code blocks for speech
+    const cleanText = text.replace(/```[\s\S]*?```/g, "").trim()
+
+    const utterance = new SpeechSynthesisUtterance(cleanText)
     utterance.rate = 0.9
     utterance.pitch = 1.1
     utterance.onstart = () => setIsSpeaking(true)
@@ -209,9 +211,9 @@ export default function ChatInterface({ user, onLogout }: ChatInterfaceProps) {
   }
 
   const extractCodeBlock = (text: string): string | null => {
-    const codeBlockMatch = text.match(/```[\s\S]*?```|```[a-zA-Z0-9]*\n([\s\S]*?)```/);
+    const codeBlockMatch = text.match(/```[\s\S]*?```|```[a-zA-Z0-9]*\n([\s\S]*?)```/)
     if (codeBlockMatch) {
-      return codeBlockMatch[0].replace(/```[a-zA-Z0-9]*\n?/g, '').trim()
+      return codeBlockMatch[0].replace(/```[a-zA-Z0-9]*\n?/g, "").trim()
     }
     return null
   }
@@ -263,14 +265,14 @@ export default function ChatInterface({ user, onLogout }: ChatInterfaceProps) {
       if (!data?.content) throw new Error("Empty response")
 
       const hasCodeBlock = /```[\s\S]*?```/.test(data.content)
-      
+
       setMessages((prev) => [
         ...prev,
-        { 
-          id: (Date.now() + 1).toString(), 
-          role: "assistant", 
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
           content: data.content,
-          hasCodeBlock 
+          hasCodeBlock,
         },
       ])
     } catch (err) {
@@ -298,13 +300,20 @@ export default function ChatInterface({ user, onLogout }: ChatInterfaceProps) {
   return (
     <main className="flex min-h-screen bg-gradient-to-b from-blue-50 to-purple-50">
       {/* Sidebar */}
-      <div className={cn(
-        "fixed md:relative w-64 h-full bg-white border-r border-purple-200 shadow-lg p-4 transition-transform",
-        showSessions ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-      )}>
+      <div
+        className={cn(
+          "fixed md:relative w-64 h-full bg-white border-r border-purple-200 shadow-lg p-4 transition-transform",
+          showSessions ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        )}
+      >
         <div className="flex items-center justify-between mb-6">
           <h2 className="font-bold text-purple-700">Sessions</h2>
-          <Button size="sm" variant="outline" onClick={() => setShowSessions(false)} className="md:hidden">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowSessions(false)}
+            className="md:hidden"
+          >
             ✕
           </Button>
         </div>
@@ -328,7 +337,7 @@ export default function ChatInterface({ user, onLogout }: ChatInterfaceProps) {
               )}
               onClick={() => {
                 setCurrentSessionId(session.id)
-                setMessages(session.messages)
+                setMessages(session.messages || [])
                 setShowSessions(false)
               }}
             >
@@ -355,12 +364,7 @@ export default function ChatInterface({ user, onLogout }: ChatInterfaceProps) {
             <p className="font-semibold">👤 {user.username}</p>
             <p className="text-xs capitalize">{user.role}</p>
           </div>
-          <Button
-            onClick={onLogout}
-            variant="outline"
-            className="w-full"
-            size="sm"
-          >
+          <Button onClick={onLogout} variant="outline" className="w-full" size="sm">
             <LogOut className="w-4 h-4 mr-2" /> Logout
           </Button>
         </div>
@@ -370,11 +374,7 @@ export default function ChatInterface({ user, onLogout }: ChatInterfaceProps) {
       <div className="flex-1 flex flex-col">
         {/* Toggle button for mobile */}
         <div className="md:hidden p-4">
-          <Button
-            onClick={() => setShowSessions(true)}
-            variant="outline"
-            size="sm"
-          >
+          <Button onClick={() => setShowSessions(true)} variant="outline" size="sm">
             ☰ Sessions
           </Button>
         </div>
@@ -395,9 +395,8 @@ export default function ChatInterface({ user, onLogout }: ChatInterfaceProps) {
                   </div>
                   <h2 className="text-xl font-semibold text-purple-700">Hello {user.username}!</h2>
                   <p className="text-gray-600 max-w-md">
-                    I'm Henry Squad AI! Ask me any question by typing or using the
-                    microphone button. I can help with homework, tell stories, explain cool
-                    facts, generate images, or write code!
+                    I'm Henry Squad AI! Ask me any question by typing or using the microphone button. I can help
+                    with homework, write code, tell stories, explain cool facts, or generate images!
                   </p>
                 </div>
               ) : (
@@ -436,7 +435,7 @@ export default function ChatInterface({ user, onLogout }: ChatInterfaceProps) {
                             className="mt-3 rounded-lg max-w-xs"
                           />
                         )}
-                        
+
                         {message.role === "assistant" && message.hasCodeBlock && (
                           <Button
                             size="sm"

@@ -1,142 +1,109 @@
-// Simple in-memory database with localStorage persistence
-// For production, use a real database like Supabase, Firebase, or PostgreSQL
-
-const DB_KEY = "henrysquadai_db"
-
-export interface User {
+// In-memory database for demo purposes
+interface User {
   id: string
   username: string
-  email: string
-  passwordHash: string
+  password: string
+  passwordHash?: string
   role: "user" | "editor"
-  createdAt: string
 }
 
-export interface ChatSession {
+interface ChatSession {
   id: string
   userId: string
   name: string
-  messages: Array<{
-    id: string
-    role: "user" | "assistant"
-    content: string
-    timestamp: string
-  }>
-  createdAt: string
-  updatedAt: string
+  messages: ChatMessage[]
+  createdAt: Date
 }
 
-export interface Database {
-  users: User[]
-  chatSessions: ChatSession[]
+interface ChatMessage {
+  id: string
+  role: "user" | "assistant"
+  content: string
+  timestamp: Date
 }
 
-let db: Database = {
-  users: [],
-  chatSessions: [],
-}
-
-// Initialize default users
-export function initializeDB() {
-  try {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem(DB_KEY)
-      if (stored) {
-        db = JSON.parse(stored)
-      } else {
-        createDefaultUsers()
-        saveDB()
-      }
-    } else {
-      createDefaultUsers()
-    }
-  } catch (error) {
-    console.error("Error initializing DB:", error)
-    createDefaultUsers()
-  }
-}
-
-function createDefaultUsers() {
-  db.users = [
+const users: Map<string, User> = new Map([
+  [
+    "henry",
     {
-      id: "user_1",
+      id: "user-1",
       username: "henry",
-      email: "henry@henrysquad.ai",
-      passwordHash: "henry123",
+      password: "henry123",
       role: "user",
-      createdAt: new Date().toISOString(),
     },
+  ],
+  [
+    "editor",
     {
-      id: "editor_1",
+      id: "user-2",
       username: "editor",
-      email: "editor@henrysquad.ai",
-      passwordHash: "editor123",
+      password: "editor123",
       role: "editor",
-      createdAt: new Date().toISOString(),
     },
-  ]
-}
+  ],
+])
 
-function saveDB() {
-  if (typeof window !== "undefined") {
-    localStorage.setItem(DB_KEY, JSON.stringify(db))
-  }
-}
+const sessions: Map<string, ChatSession> = new Map()
+const messages: Map<string, ChatMessage[]> = new Map()
 
-export function getUser(username: string): User | undefined {
-  return db.users.find((u) => u.username === username)
-}
-
-export function createChatSession(userId: string, name: string): ChatSession {
-  const session: ChatSession = {
-    id: `session_${Date.now()}`,
-    userId,
-    name,
-    messages: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }
-  db.chatSessions.push(session)
-  saveDB()
-  return session
+export function getUser(username: string): User | null {
+  return users.get(username) || null
 }
 
 export function getChatSessions(userId: string): ChatSession[] {
-  return db.chatSessions.filter((s) => s.userId === userId)
+  return Array.from(sessions.values())
+    .filter((s) => s.userId === userId)
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .map((session) => ({
+      ...session,
+      messages: messages.get(session.id) || [],
+    }))
 }
 
-export function getChatSession(sessionId: string): ChatSession | undefined {
-  return db.chatSessions.find((s) => s.id === sessionId)
+export function getChatSession(sessionId: string): ChatSession | null {
+  const session = sessions.get(sessionId)
+  if (!session) return null
+
+  return {
+    ...session,
+    messages: messages.get(sessionId) || [],
+  }
 }
 
-export function addMessage(
+export function createChatSession(userId: string, name: string): ChatSession {
+  const sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  const session: ChatSession = {
+    id: sessionId,
+    userId,
+    name,
+    messages: [],
+    createdAt: new Date(),
+  }
+
+  sessions.set(sessionId, session)
+  messages.set(sessionId, [])
+
+  return session
+}
+
+export function saveChatMessage(
   sessionId: string,
   role: "user" | "assistant",
   content: string
-): void {
-  const session = db.chatSessions.find((s) => s.id === sessionId)
-  if (session) {
-    session.messages.push({
-      id: `msg_${Date.now()}`,
-      role,
-      content,
-      timestamp: new Date().toISOString(),
-    })
-    session.updatedAt = new Date().toISOString()
-    saveDB()
+): ChatMessage {
+  const message: ChatMessage = {
+    id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    role,
+    content,
+    timestamp: new Date(),
   }
-}
 
-export function deleteChatSession(sessionId: string): void {
-  db.chatSessions = db.chatSessions.filter((s) => s.id !== sessionId)
-  saveDB()
-}
-
-export function renameChatSession(sessionId: string, newName: string): void {
-  const session = db.chatSessions.find((s) => s.id === sessionId)
-  if (session) {
-    session.name = newName
-    session.updatedAt = new Date().toISOString()
-    saveDB()
+  if (!messages.has(sessionId)) {
+    messages.set(sessionId, [])
   }
+
+  const sessionMessages = messages.get(sessionId)!
+  sessionMessages.push(message)
+
+  return message
 }
